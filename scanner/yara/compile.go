@@ -110,13 +110,25 @@ func compile(what int, inputfiles []string) (*yr.Rules, error) {
 			return nil, err
 		}
 	}
+	whats := [...]string{"file", "process"}[what]
 	rs, err := c.GetRules()
-	if c.Warnings != nil && config.YaraFailOnWarnings {
-		w := c.Warnings[0]
-		return nil, fmt.Errorf("Yara emits at least one warning. %s:%d %s", w.Filename, w.Line, w.Text)
-	}
 	if err != nil {
-		return nil, err
+		for _, e := range c.Warnings {
+			log.Errorf("YARA compiler error in %s ruleset: %s:%d %s",
+				whats, e.Filename, e.Line, e.Text)
+		}
+		return nil, fmt.Errorf("%d YARA compiler errors(s) found, rejecting %s ruleset",
+			len(c.Errors), whats)
+	}
+	if len(c.Warnings) > 0 {
+		for _, w := range c.Warnings {
+			log.Warnf("YARA compiler warning in %s ruleset: %s:%d %s",
+				whats, w.Filename, w.Line, w.Text)
+		}
+		if config.YaraFailOnWarnings {
+			return nil, fmt.Errorf("%d YARA compiler warning(s) found, rejecting %s ruleset",
+				len(c.Warnings), whats)
+		}
 	}
 	if len(rs.GetRules()) == 0 {
 		return nil, errors.New("No YARA rules defined")
